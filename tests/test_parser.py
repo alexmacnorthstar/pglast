@@ -183,6 +183,19 @@ def test_split():
     assert tuple(sql[s] for s in split(sql, only_slices=True)) == expected
 
 
+def test_split_only_slices_ignore_next_statement_text_in_previous_comment():
+    sql = 'select 1 /* select 2 is not the next statement */; select 2'
+    expected = ('select 1 /* select 2 is not the next statement */', 'select 2')
+
+    slices = split(sql, only_slices=True)
+
+    assert split(sql) == expected
+    assert tuple(sql[s] for s in slices) == expected
+    assert slices[0].start == 0
+    assert sql.index('select 2') < sql.rindex('select 2')
+    assert slices[1].start == sql.rindex('select 2')
+
+
 def test_scan():
     sql = 'select /* something here */ 1'
     result = scan(sql)
