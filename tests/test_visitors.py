@@ -279,6 +279,37 @@ def test_delete_action():
     assert RawStream()(raw) == ''
 
 
+def test_add_action():
+    class AddMissingSelectTargets(visitors.Visitor):
+        def visit_ResTarget(self, ancestors, node):
+            if isinstance(node.val, ast.A_Const) and node.val.val.ival == 1:
+                return (
+                    visitors.Add,
+                    ast.ResTarget(val=ast.A_Const(val=ast.Integer(2))),
+                    ast.ResTarget(val=ast.A_Const(val=ast.Integer(3))),
+                )
+
+    raw = parse_sql('select 1')
+    AddMissingSelectTargets()(raw)
+    assert RawStream()(raw) == 'SELECT 1, 2, 3'
+
+    class AddEvenValueAfterOdd(visitors.Visitor):
+        def visit_A_Const(self, ancestors, node):
+            if isinstance(node.val, ast.Integer) and node.val.ival == 1:
+                return visitors.Add, ast.A_Const(val=ast.Integer(2))
+
+    raw = parse_sql('INSERT INTO foo VALUES (1, 3)')
+    AddEvenValueAfterOdd()(raw)
+    assert RawStream()(raw) == 'INSERT INTO foo VALUES (1, 2, 3)'
+
+    class BareAdd(visitors.Visitor):
+        def visit_A_Const(self, ancestors, node):
+            return visitors.Add
+
+    with pytest.raises(ValueError, match='requires one or more nodes'):
+        BareAdd()(parse_sql('select 1'))
+
+
 def test_alter_node():
     class AddNullConstraint(visitors.Visitor):
         def visit_ColumnDef(self, ancestors, node):
