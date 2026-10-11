@@ -168,17 +168,44 @@ class RawStream(OutputStream):
         """Main entry point: execute :meth:`print_node` on each statement in `sql`.
 
         :param sql: the SQL statement
-        :param bool plpgsql: whether `sql` is really a ``plpgsql`` statement
+        :param bool plpgsql: validate and format procedural bodies in textual input
         :returns: a string with the equivalent SQL obtained by serializing the syntax tree
 
         The `sql` statement may be either a ``str`` containing the ``SQL`` in textual form, or
         a concrete :class:`.ast.Node` instance or a tuple of them.
+
+        With `plpgsql=True`, textual input is validated and procedural blocks and statements
+        are indented as well. Expressions, strings and comments retain their original text.
         """
 
         from .visitors import Visitor
 
         if isinstance(sql, str):
-            sql = parse_plpgsql(sql) if plpgsql else parse_sql(sql)
+            if plpgsql:
+                parse_plpgsql(sql)
+            sql = parse_sql(sql)
+            if plpgsql:
+                from ._plpgsql import format_body
+
+                for statement in sql:
+                    node = statement.stmt
+                    if isinstance(node, ast.CreateFunctionStmt):
+                        options = node.options or ()
+                    elif isinstance(node, ast.DoStmt):
+                        options = node.args or ()
+                    else:
+                        continue
+                    language = next((option.arg.sval for option in options
+                                     if option.defname == 'language'
+                                     and isinstance(option.arg, ast.String)),
+                                    'plpgsql' if isinstance(node, ast.DoStmt) else None)
+                    if language != 'plpgsql':
+                        continue
+                    for option in options:
+                        if option.defname == 'as':
+                            code = option.arg[0] if isinstance(option.arg, tuple) else option.arg
+                            if isinstance(code, ast.String) and code.sval is not None:
+                                code.sval = format_body(code.sval)
         elif isinstance(sql, ast.Node):
             sql = (sql,)
         elif isinstance(sql, tuple) and not sql:
