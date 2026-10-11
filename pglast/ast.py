@@ -4813,7 +4813,7 @@ def _fixup_attribute_types_in_slots():
             elif ctype == 'char':
                 ptype = (str, int)
 
-                def adaptor(value):
+                def adaptor(value, cls=cls, attr=attr):
                     if isinstance(value, int):
                         value = chr(value)
                     elif len(value) != 1:

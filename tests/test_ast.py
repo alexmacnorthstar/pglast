@@ -146,3 +146,21 @@ def test_issue_153b():
         'ordinality': False}
     rf = ast.RangeFunction(serialized)
     assert isinstance(rf.functions[0][0], ast.FuncCall)
+
+
+@pytest.mark.parametrize('node_class,attribute', (
+    (ast.RangeVar, 'relpersistence'),
+    (ast.ColumnDef, 'storage'),
+    (ast.ColumnDef, 'identity'),
+))
+@pytest.mark.parametrize('value', ('', 'bad'))
+@pytest.mark.parametrize('constructor', (False, True))
+def test_invalid_char_identifies_field(node_class, attribute, value, constructor):
+    with pytest.raises(ValueError) as exc:
+        if constructor:
+            node_class(**{attribute: value})
+        else:
+            setattr(node_class(), attribute, value)
+    assert str(exc.value) == (
+        f'Bad value for attribute {node_class.__name__}.{attribute},'
+        f' expected a single char, got {value!r}')
