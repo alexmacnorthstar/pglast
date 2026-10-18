@@ -93,13 +93,14 @@ def corpus_statements():
 
 
 @pytest.mark.parametrize('src,lineno,statement', corpus_statements(), ids=make_id)
-def test_printers_roundtrip(src, lineno, statement):
+@pytest.mark.parametrize('special_functions', (False, True))
+def test_printers_roundtrip(src, lineno, statement, special_functions):
     try:
         orig_ast = parse_sql(statement)
     except:  # noqa
         raise RuntimeError("%s:%d:Could not parse “%s”" % (src, lineno, statement))
 
-    serialized = RawStream()(orig_ast)
+    serialized = RawStream(special_functions=special_functions)(orig_ast)
     try:
         serialized_ast = parse_sql(serialized)
     except:  # noqa
@@ -108,7 +109,7 @@ def test_printers_roundtrip(src, lineno, statement):
     assert orig_ast == serialized_ast, ("Statement “%s” from %s at line %d != “%s”"
                                       % (statement, src, lineno, serialized))
 
-    indented = IndentedStream()(orig_ast)
+    indented = IndentedStream(special_functions=special_functions)(orig_ast)
     try:
         indented_ast = parse_sql(indented)
     except:  # noqa
@@ -192,7 +193,8 @@ skip_for_good_reasons = {
                          [src.name for src in sorted(pg_regressions_dir.glob('*.sql'))
                           if src.name not in skip_for_good_reasons],
                          ids=make_id)
-def test_pg_regress_corpus(filename):
+@pytest.mark.parametrize('special_functions', (False, True))
+def test_pg_regress_corpus(filename, special_functions):
     # we do this dance to minimize the length of the test name
     src = pg_regressions_dir / filename
     source = src.read_text()
@@ -224,7 +226,7 @@ def test_pg_regress_corpus(filename):
                                % (trimmed_stmt, rel_src, lineno, e))
 
         try:
-            serialized = RawStream()(orig_ast)
+            serialized = RawStream(special_functions=special_functions)(orig_ast)
         except NotImplementedError as e:
             raise NotImplementedError("Statement “%s” from %s at line %d, could not reprint: %s"
                                       % (trimmed_stmt, rel_src, lineno, e))

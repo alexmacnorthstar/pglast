@@ -244,6 +244,16 @@ class RawStream(OutputStream):
             if (name in SQL_SYNTAX_SPECIAL_FUNCTIONS
                     and node.funcformat != enums.CoercionForm.COERCE_SQL_SYNTAX):
                 return None
+            if name in ('pg_catalog.normalize', 'pg_catalog.is_normalized'):
+                # SQL syntax accepts only a normalization keyword, not an expression.
+                if not node.args or len(node.args) > 2:
+                    return None
+                if len(node.args) == 2:
+                    form = node.args[1]
+                    if (not isinstance(form, ast.A_Const)
+                            or not isinstance(form.val, ast.String)
+                            or form.val.sval not in ('NFC', 'NFD', 'NFKC', 'NFKD')):
+                        return None
 
         if (self.special_functions
                 or (node is not None

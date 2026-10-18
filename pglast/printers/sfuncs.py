@@ -7,6 +7,7 @@
 #
 
 from .. import ast
+from ..precedence import ExprPrec, Side
 from . import special_function
 
 # reminder for not yet implemented special functions:
@@ -88,10 +89,12 @@ def is_normalized(node, output):
     """
     Emit function ``pg_catalog.is_normalized(v, kind)`` as ``v IS kind NORMALIZED``.
     """
-    output.print_node(node.args[0])
+    output.print_operand(node.args[0], ExprPrec.IS, Side.LEFT)
     output.write(' IS ')
-    output.write(node.args[1].val.sval)
-    output.write(' NORMALIZED')
+    if len(node.args) > 1:
+        output.write(node.args[1].val.sval)
+        output.write(' ')
+    output.write('NORMALIZED')
 
 
 @special_function('pg_catalog.overlaps')
@@ -117,8 +120,9 @@ def overlay(node, output):
         output.print_node(node.args[1])
         output.write(' FROM ')
         output.print_node(node.args[2])
-        output.write(' FOR ')
-        output.print_node(node.args[3])
+        if len(node.args) > 3:
+            output.write(' FOR ')
+            output.print_node(node.args[3])
 
 
 @special_function('pg_catalog.position')
@@ -164,12 +168,12 @@ def timezone(node, output):
     Emit function ``pg_catalog.timezone(tz, timestamp)`` as ``timestamp AT TIME ZONE tz``.
     """
     if len(node.args) == 1:
-        output.print_node(node.args[0])
+        output.print_operand(node.args[0], ExprPrec.AT, Side.LEFT)
         output.write(' AT LOCAL')
     else:
-        output.print_node(node.args[1])
+        output.print_operand(node.args[1], ExprPrec.AT, Side.LEFT)
         output.write(' AT TIME ZONE ')
-        output.print_node(node.args[0])
+        output.print_operand(node.args[0], ExprPrec.AT, Side.RIGHT)
 
 
 @special_function('pg_catalog.xmlexists')
