@@ -231,8 +231,9 @@ class RawStream(OutputStream):
         :returns: either ``None`` or a callable
 
         When the option `special_functions` is ``True``, return the printer function associated
-        with `name`, if present. For functions whose comma-call form is distinct from their
-        SQL syntax form, also return the printer when the parsed node used SQL syntax.
+        with `name`, if present and compatible with the supplied node. For functions whose
+        comma-call form is distinct from their SQL syntax form, preserve the parsed form.
+        Return ``None`` to use the ordinary function-call printer instead.
         """
 
         printer = get_special_function(name)
@@ -240,12 +241,13 @@ class RawStream(OutputStream):
             return None
         if node is None:
             return printer if self.special_functions else None
-        if not sfuncs.can_use_special_syntax(name, node):
+        if not sfuncs.can_use_special_syntax(printer, node):
             return None
-        if name in SQL_SYNTAX_SPECIAL_FUNCTIONS:
-            return (printer if node.funcformat == enums.CoercionForm.COERCE_SQL_SYNTAX
-                    else None)
-        return printer if self.special_functions else None
+        if (self.special_functions
+                or (name in SQL_SYNTAX_SPECIAL_FUNCTIONS
+                    and node.funcformat == enums.CoercionForm.COERCE_SQL_SYNTAX)):
+            return printer
+        return None
 
     def indent(self, amount=0, relative=True):
         "Do nothing, shall be overridden by the prettifier subclass."

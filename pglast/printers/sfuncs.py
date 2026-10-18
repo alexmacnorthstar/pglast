@@ -6,7 +6,7 @@
 # :Copyright: © 2017, 2018, 2021, 2022, 2024, 2026 Lele Gaifax
 #
 
-from .. import ast
+from .. import ast, enums
 from ..precedence import ExprPrec, Side
 from . import special_function
 
@@ -17,14 +17,20 @@ from . import special_function
 # 'foo' is not nfc normalized
 
 
-def can_use_special_syntax(name, node):
+def can_use_special_syntax(printer, node):
     "Return whether SQL special syntax can preserve this call's arguments and decorations."
 
-    # The special-function printers do not emit ordinary-call decorations.
+    # User-registered printers own their rendering policy, including overrides.
+    if printer not in _BUILTIN_PRINTERS:
+        return True
+    if (printer in (extract, position)
+            and node.funcformat != enums.CoercionForm.COERCE_SQL_SYNTAX):
+        return False
+    # The built-in special-function printers do not emit ordinary-call decorations.
     if (node.agg_order or node.agg_filter or node.over or node.agg_within_group
             or node.agg_star or node.agg_distinct or node.func_variadic):
         return False
-    if name in ('pg_catalog.normalize', 'pg_catalog.is_normalized'):
+    if printer in (normalize, is_normalized):
         return _has_normalization_form(node.args)
     return True
 
@@ -210,3 +216,7 @@ def xmlexists(node, output):
         output.print_c_expr(node.args[0])
         output.write(' PASSING BY REF ')
         output.print_c_expr(node.args[1])
+
+
+_BUILTIN_PRINTERS = (btrim, pg_collation_for, extract, ltrim, normalize, is_normalized,
+                     overlaps, overlay, position, rtrim, substring, timezone, xmlexists)
