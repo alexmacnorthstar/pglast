@@ -234,6 +234,17 @@ class RawStream(OutputStream):
         SQL syntax form, also return the printer when the parsed node used SQL syntax.
         """
 
+        if node is not None:
+            # SQL constructs have no syntax for ordinary-call decorations.
+            if (node.agg_order or node.agg_filter or node.over
+                    or node.agg_within_group or node.agg_star or node.agg_distinct
+                    or node.func_variadic):
+                return None
+            # Preserve explicit calls, including EXTRACT's cast-wrapped field.
+            if (name in SQL_SYNTAX_SPECIAL_FUNCTIONS
+                    and node.funcformat != enums.CoercionForm.COERCE_SQL_SYNTAX):
+                return None
+
         if (self.special_functions
                 or (node is not None
                     and name in SQL_SYNTAX_SPECIAL_FUNCTIONS
