@@ -17,6 +17,31 @@ from . import special_function
 # 'foo' is not nfc normalized
 
 
+def can_use_special_syntax(name, node):
+    "Return whether SQL special syntax can preserve this call's arguments and decorations."
+
+    # The special-function printers do not emit ordinary-call decorations.
+    if (node.agg_order or node.agg_filter or node.over or node.agg_within_group
+            or node.agg_star or node.agg_distinct or node.func_variadic):
+        return False
+    if name in ('pg_catalog.normalize', 'pg_catalog.is_normalized'):
+        return _has_normalization_form(node.args)
+    return True
+
+
+def _has_normalization_form(args):
+    "SQL normalization syntax permits an optional form keyword, not an expression."
+
+    if not args or len(args) > 2:
+        return False
+    if len(args) == 1:
+        return True
+    form = args[1]
+    return (isinstance(form, ast.A_Const)
+            and isinstance(form.val, ast.String)
+            and form.val.sval in ('NFC', 'NFD', 'NFKC', 'NFKD'))
+
+
 def _print_trim(where, node, output):
     output.write('trim({}'.format(where))
     if len(node.args) > 1:

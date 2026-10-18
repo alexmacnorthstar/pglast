@@ -15,7 +15,7 @@ from . import ast, enums, parse_plpgsql, parse_sql
 from .keywords import RESERVED_KEYWORDS, TYPE_FUNC_NAME_KEYWORDS
 from .precedence import (ExprContext, is_b_expr_rule, needs_parens_as_c_expr,
                          needs_parens_for_precedence)
-from .printers import get_printer_for_node, get_special_function
+from .printers import get_printer_for_node, get_special_function, sfuncs
 
 
 is_simple_name = compile(r'[a-z_][a-z0-9_]*$').match
@@ -227,6 +227,7 @@ class RawStream(OutputStream):
         """Look for a specific printer for function `name` in :data:`SPECIAL_FUNCTIONS`.
 
         :param str name: the qualified name of the function
+        :param node: optional function call to check for compatibility with special syntax
         :returns: either ``None`` or a callable
 
         When the option `special_functions` is ``True``, return the printer function associated
@@ -234,32 +235,17 @@ class RawStream(OutputStream):
         SQL syntax form, also return the printer when the parsed node used SQL syntax.
         """
 
-        if node is not None:
-            # SQL constructs have no syntax for ordinary-call decorations.
-            if (node.agg_order or node.agg_filter or node.over
-                    or node.agg_within_group or node.agg_star or node.agg_distinct
-                    or node.func_variadic):
-                return None
-            # Preserve explicit calls, including EXTRACT's cast-wrapped field.
-            if (name in SQL_SYNTAX_SPECIAL_FUNCTIONS
-                    and node.funcformat != enums.CoercionForm.COERCE_SQL_SYNTAX):
-                return None
-            if name in ('pg_catalog.normalize', 'pg_catalog.is_normalized'):
-                # SQL syntax accepts only a normalization keyword, not an expression.
-                if not node.args or len(node.args) > 2:
-                    return None
-                if len(node.args) == 2:
-                    form = node.args[1]
-                    if (not isinstance(form, ast.A_Const)
-                            or not isinstance(form.val, ast.String)
-                            or form.val.sval not in ('NFC', 'NFD', 'NFKC', 'NFKD')):
-                        return None
-
-        if (self.special_functions
-                or (node is not None
-                    and name in SQL_SYNTAX_SPECIAL_FUNCTIONS
-                    and node.funcformat == enums.CoercionForm.COERCE_SQL_SYNTAX)):
-            return get_special_function(name)
+        printer = get_special_function(name)
+        if printer is None:
+            return None
+        if node is None:
+            return printer if self.special_functions else None
+        if not sfuncs.can_use_special_syntax(name, node):
+            return None
+        if name in SQL_SYNTAX_SPECIAL_FUNCTIONS:
+            return (printer if node.funcformat == enums.CoercionForm.COERCE_SQL_SYNTAX
+                    else None)
+        return printer if self.special_functions else None
 
     def indent(self, amount=0, relative=True):
         "Do nothing, shall be overridden by the prettifier subclass."
